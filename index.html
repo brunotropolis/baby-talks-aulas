@@ -88,6 +88,87 @@
   }
   .access-info .label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
   .access-info .value { color: #fff; font-weight: 500; font-size: 14px; }
+  .countdown {
+    text-align: center;
+    padding: 4px 14px;
+    border-left: 1px solid rgba(255,255,255,.08);
+    margin-left: 6px;
+  }
+  .countdown-num {
+    font-size: 24px;
+    font-weight: 700;
+    color: #E91E63;
+    line-height: 1;
+  }
+  .countdown-label {
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+  .countdown.warning .countdown-num { color: #FFB74D; }
+  .countdown.urgent .countdown-num { color: #FF6B6B; }
+  /* Página "Saiu do ar" */
+  .offline-screen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    background: #0F0F12;
+    color: #fff;
+  }
+  .offline-screen .icon-big {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #E91E63, #C2185B);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px rgba(233, 30, 99, .3);
+  }
+  .offline-screen h1 {
+    font-size: 28px;
+    margin-bottom: 12px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .offline-screen p {
+    color: #aaa;
+    font-size: 16px;
+    max-width: 460px;
+    margin-bottom: 8px;
+    line-height: 1.6;
+  }
+  .offline-screen .info-line {
+    color: #777;
+    font-size: 13px;
+    margin-top: 24px;
+    margin-bottom: 32px;
+  }
+  .offline-screen .btn-cta {
+    background: linear-gradient(135deg, #E91E63, #F06292);
+    color: #fff;
+    text-decoration: none;
+    padding: 14px 32px;
+    border-radius: 14px;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(233, 30, 99, .3);
+    transition: all .2s;
+    display: inline-block;
+  }
+  .offline-screen .btn-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(233, 30, 99, .4); }
+  .offline-screen .footer-mini {
+    margin-top: 48px;
+    color: #555;
+    font-size: 12px;
+  }
   .section-title {
     font-size: 13px;
     color: #999;
@@ -291,9 +372,13 @@
 
   <div class="access-info">
     <div class="icon">⏰</div>
-    <div>
+    <div style="flex:1">
       <div class="label">Seu acesso é válido até</div>
       <div class="value" id="expiresAt">—</div>
+    </div>
+    <div class="countdown" id="countdown" style="display:none">
+      <div class="countdown-num" id="countdownNum">—</div>
+      <div class="countdown-label" id="countdownLabel">dias restantes</div>
     </div>
   </div>
 
@@ -332,16 +417,53 @@
     { num: 11, titulo: 'O puerpério', thumb: 'thumbs/11.png', panda: '' }
   ];
 
+  const TOKEN_KEY = 'baby_talks_token';
+
   function getToken() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('t') || params.get('token') || '';
+    const fromUrl = params.get('t') || params.get('token') || '';
+    if (fromUrl) {
+      try { localStorage.setItem(TOKEN_KEY, fromUrl); } catch(e) {}
+      // remove ?t= da URL pra ficar mais limpa (sem reload)
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+      return fromUrl;
+    }
+    try { return localStorage.getItem(TOKEN_KEY) || ''; } catch(e) { return ''; }
   }
 
   function fmtDate(iso) {
     if (!iso) return '—';
-    const d = new Date(iso);
+    const d = new Date(iso + 'T12:00:00'); // meio-dia pra evitar issues de timezone
     if (isNaN(d)) return '—';
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  }
+
+  function daysUntil(iso) {
+    if (!iso) return null;
+    const target = new Date(iso + 'T23:59:59');
+    const now = new Date();
+    const ms = target.getTime() - now.getTime();
+    return Math.ceil(ms / (24 * 60 * 60 * 1000));
+  }
+
+  function renderCountdown(expira) {
+    const days = daysUntil(expira);
+    if (days === null) return;
+    const wrap = document.getElementById('countdown');
+    const num = document.getElementById('countdownNum');
+    const label = document.getElementById('countdownLabel');
+    wrap.style.display = 'block';
+    if (days <= 0) {
+      num.textContent = '0';
+      label.textContent = 'expirado';
+      wrap.classList.add('urgent');
+    } else {
+      num.textContent = days;
+      label.textContent = days === 1 ? 'dia restante' : 'dias restantes';
+      if (days <= 3) wrap.classList.add('urgent');
+      else if (days <= 7) wrap.classList.add('warning');
+    }
   }
 
   function renderAulas(aulas) {
@@ -401,12 +523,50 @@
     `;
   }
 
+  function showOffline(motivo, expira) {
+    // Limpa o token expirado pra evitar loop
+    if (motivo === 'expirado') {
+      try { localStorage.removeItem(TOKEN_KEY); } catch(e) {}
+    }
+    const dataFmt = expira ? fmtDate(expira) : '';
+    const ehExpirado = motivo === 'expirado';
+    const ehInvalido = motivo === 'nao_encontrado' || motivo === 'sem_token';
+    const ehBloqueado = motivo === 'bloqueado';
+
+    let titulo, mensagem, infoLine;
+    if (ehExpirado) {
+      titulo = 'O curso saiu do ar 💛';
+      mensagem = 'O período de acesso ao curso "O Dia do Parto" terminou. Esperamos que ele tenha te preparado pra esse momento tão especial.';
+      infoLine = dataFmt ? `Esse acesso foi liberado até ${dataFmt}.` : '';
+    } else if (ehBloqueado) {
+      titulo = 'Acesso bloqueado';
+      mensagem = 'Seu acesso foi suspenso. Entre em contato com a gente para mais informações.';
+      infoLine = '';
+    } else {
+      titulo = 'Link inválido';
+      mensagem = 'Esse link de acesso não foi reconhecido. Confira se você está usando o link recebido após responder a pesquisa.';
+      infoLine = '';
+    }
+
+    document.body.innerHTML = `
+      <div class="offline-screen">
+        <div class="icon-big">${ehExpirado ? '⏰' : ehBloqueado ? '🔒' : '⚠️'}</div>
+        <h1>${titulo}</h1>
+        <p>${mensagem}</p>
+        ${infoLine ? `<div class="info-line">${infoLine}</div>` : ''}
+        <a href="https://pesquisa.manualdorecemnascido.com.br" class="btn-cta">${ehExpirado ? 'Saber mais sobre o evento Baby Talks' : 'Responder pesquisa'}</a>
+        <div class="footer-mini">Manual do Recém-nascido · Baby Talks 2026</div>
+      </div>
+    `;
+    document.body.style.background = '#0F0F12';
+  }
+
   async function init() {
     const token = getToken();
 
-    // Sem token = preview/mock (mostra interface mas sem acesso real)
+    // Sem token = preview da estrutura (mostra cards + redireciona pro form ao clicar)
     if (!token) {
-      document.getElementById('expiresAt').textContent = '60 dias após a resposta';
+      document.getElementById('expiresAt').textContent = 'após responder a pesquisa';
       renderAulas(MOCK_AULAS);
       document.getElementById('splash').classList.add('hide');
       return;
@@ -416,20 +576,17 @@
       const r = await fetch(`${VALIDATE_URL}?t=${encodeURIComponent(token)}`);
       const data = await r.json();
       if (!data.valido) {
-        if (data.motivo === 'expirado') {
-          showError('Seu acesso de 60 dias expirou. Mas guarda a memória do que aprendeu — qualquer coisa, fale com a gente.');
-        } else {
-          showError('Token inválido ou não encontrado. Confira o link que você recebeu.');
-        }
+        showOffline(data.motivo, data.expira_em);
         return;
       }
       document.getElementById('expiresAt').textContent = fmtDate(data.expira_em);
+      renderCountdown(data.expira_em);
       renderAulas(data.aulas && data.aulas.length ? data.aulas : MOCK_AULAS);
       document.getElementById('splash').classList.add('hide');
     } catch(err) {
       console.error(err);
       // fallback: mostra UI sem dados ao vivo
-      document.getElementById('expiresAt').textContent = '60 dias após a resposta';
+      document.getElementById('expiresAt').textContent = 'após responder a pesquisa';
       renderAulas(MOCK_AULAS);
       document.getElementById('splash').classList.add('hide');
     }
