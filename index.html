@@ -417,7 +417,7 @@
     { num: 11, titulo: 'O puerpério', thumb: 'thumbs/11.png', panda: '' }
   ];
 
-  const TOKEN_KEY = 'baby_talks_token';
+  const TOKEN_KEY = 'curso_token';
 
   function getToken() {
     const params = new URLSearchParams(window.location.search);
@@ -554,8 +554,8 @@
         <h1>${titulo}</h1>
         <p>${mensagem}</p>
         ${infoLine ? `<div class="info-line">${infoLine}</div>` : ''}
-        <a href="https://pesquisa.manualdorecemnascido.com.br" class="btn-cta">${ehExpirado ? 'Saber mais sobre o evento Baby Talks' : 'Responder pesquisa'}</a>
-        <div class="footer-mini">Manual do Recém-nascido · Baby Talks 2026</div>
+        <a href="https://pesquisa.manualdorecemnascido.com.br" class="btn-cta">${ehExpirado ? 'Saber mais sobre o evento' : 'Responder pesquisa'}</a>
+        <div class="footer-mini">Manual do Recém-nascido · 2026</div>
       </div>
     `;
     document.body.style.background = '#0F0F12';
