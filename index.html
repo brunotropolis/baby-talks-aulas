@@ -316,8 +316,8 @@
 <script>
   const VALIDATE_URL = 'https://n8n-n8n.xktssy.easypanel.host/webhook/baby-talks-validar';
 
-  // FALLBACK / MOCK — usado em preview sem backend.
-  // Em produção, lista vem do webhook (planilha aba Aulas)
+  // FALLBACK / MOCK — usado em preview sem token (sem panda_url).
+  // Em produção, lista vem do webhook com URLs Panda válidas.
   const MOCK_AULAS = [
     { num: 1, titulo: 'Boas-vindas', thumb: 'thumbs/1.png', panda: '' },
     { num: 2, titulo: 'O que levar para a maternidade', thumb: 'thumbs/2.png', panda: '' },
@@ -327,10 +327,9 @@
     { num: 6, titulo: 'Parto normal', thumb: 'thumbs/6.png', panda: '' },
     { num: 7, titulo: 'Parto cesárea', thumb: 'thumbs/7.png', panda: '' },
     { num: 8, titulo: 'Golden hour', thumb: 'thumbs/8.png', panda: '' },
-    { num: 9, titulo: 'Aula 9', thumb: 'thumbs/9.png', panda: '' },
-    { num: 10, titulo: 'Aula 10', thumb: 'thumbs/10.png', panda: '' },
-    { num: 11, titulo: 'Aula 11', thumb: 'thumbs/11.png', panda: '' },
-    { num: 12, titulo: 'Aula 12', thumb: 'thumbs/12.png', panda: '' }
+    { num: 9, titulo: 'Fotos e visitas', thumb: 'thumbs/9.png', panda: '' },
+    { num: 10, titulo: 'A saída', thumb: 'thumbs/10.png', panda: '' },
+    { num: 11, titulo: 'O puerpério', thumb: 'thumbs/11.png', panda: '' }
   ];
 
   function getToken() {
