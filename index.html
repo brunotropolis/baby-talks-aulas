@@ -297,7 +297,7 @@
     </div>
   </div>
 
-  <div class="section-title">12 aulas · O Dia do Parto</div>
+  <div class="section-title" id="sectionTitle">11 aulas · O Dia do Parto</div>
 
   <div class="grid" id="grid"></div>
 
@@ -366,7 +366,10 @@
 
   function openAula(a) {
     if (!a.panda) {
-      alert('Esta aula ainda está sendo preparada. Volte em instantes 💕');
+      // Sem token = sem acesso liberado
+      if (confirm('Pra assistir as aulas você precisa responder a pesquisa primeiro.\n\nQuer ir pra pesquisa agora?')) {
+        window.location.href = 'https://pesquisa.manualdorecemnascido.com.br/';
+      }
       return;
     }
     document.getElementById('player').src = a.panda;
