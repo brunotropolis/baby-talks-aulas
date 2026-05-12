@@ -418,19 +418,33 @@
   ];
 
   const TOKEN_KEY = 'curso_token';
+  const EMAIL_KEY = 'curso_email';
 
-  function getToken() {
+  function getAuthParams() {
+    // Prioridade: query params da URL > localStorage
     const params = new URLSearchParams(window.location.search);
-    const fromUrl = params.get('t') || params.get('token') || '';
-    if (fromUrl) {
-      try { localStorage.setItem(TOKEN_KEY, fromUrl); } catch(e) {}
-      // remove ?t= da URL pra ficar mais limpa (sem reload)
-      const cleanUrl = window.location.origin + window.location.pathname;
-      window.history.replaceState({}, '', cleanUrl);
-      return fromUrl;
+    const tokenUrl = (params.get('t') || params.get('token') || '').trim();
+    const emailUrl = (params.get('email') || params.get('e') || '').trim();
+
+    if (tokenUrl) {
+      try { localStorage.setItem(TOKEN_KEY, tokenUrl); } catch(e) {}
     }
-    try { return localStorage.getItem(TOKEN_KEY) || ''; } catch(e) { return ''; }
+    if (emailUrl) {
+      try { localStorage.setItem(EMAIL_KEY, emailUrl); } catch(e) {}
+    }
+    if (tokenUrl || emailUrl) {
+      // Limpa URL sem reload
+      window.history.replaceState({}, '', window.location.origin + window.location.pathname);
+    }
+
+    let token = '', email = '';
+    try { token = tokenUrl || localStorage.getItem(TOKEN_KEY) || ''; } catch(e) {}
+    try { email = emailUrl || localStorage.getItem(EMAIL_KEY) || ''; } catch(e) {}
+    return { token, email };
   }
+
+  // Compat: chamado em alguns lugares pra reset (showOffline)
+  function getToken() { return getAuthParams().token; }
 
   function fmtDate(iso) {
     if (!iso) return '—';
@@ -561,21 +575,86 @@
     document.body.style.background = '#0F0F12';
   }
 
-  async function init() {
-    const token = getToken();
+  function showEmailLogin(errorMsg) {
+    document.getElementById('splash').innerHTML = `
+      <div style="max-width:420px;text-align:center;padding:24px;">
+        <div style="font-size:48px;margin-bottom:16px;">🤰</div>
+        <h2 style="color:#fff;font-size:22px;font-weight:600;margin-bottom:10px;">Bem-vinda ao curso</h2>
+        <p style="color:#999;font-size:14px;line-height:1.5;margin-bottom:24px;">Digite o e-mail que você usou na pesquisa pra liberar seu acesso.</p>
+        <input id="loginEmail" type="email" autocomplete="email" placeholder="seu@email.com"
+          style="width:100%;padding:14px 16px;background:#1a1a1a;border:1px solid #333;border-radius:10px;color:#fff;font-size:15px;margin-bottom:12px;outline:none;box-sizing:border-box;">
+        <button onclick="tryEmailLogin()"
+          style="width:100%;padding:14px;background:#E91E63;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">
+          Acessar o curso →
+        </button>
+        <div id="loginErr" style="color:#ef5350;font-size:13px;margin-top:14px;min-height:20px;">${errorMsg || ''}</div>
+        <p style="color:#666;font-size:12px;margin-top:24px;line-height:1.5;">
+          Ainda não respondeu a pesquisa?<br>
+          <a href="https://pesquisa.manualdorecemnascido.com.br" style="color:#E91E63;text-decoration:none;font-weight:500;">Responder agora</a>
+        </p>
+      </div>
+    `;
+    setTimeout(() => {
+      const inp = document.getElementById('loginEmail');
+      if (inp) {
+        inp.focus();
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') tryEmailLogin(); });
+      }
+    }, 50);
+  }
 
-    // Sem token = preview da estrutura (mostra cards + redireciona pro form ao clicar)
-    if (!token) {
-      document.getElementById('expiresAt').textContent = 'após responder a pesquisa';
-      renderAulas(MOCK_AULAS);
-      document.getElementById('splash').classList.add('hide');
+  async function tryEmailLogin() {
+    const inp = document.getElementById('loginEmail');
+    const err = document.getElementById('loginErr');
+    const email = (inp.value || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      err.textContent = 'Digite um e-mail válido.';
+      return;
+    }
+    err.textContent = 'Validando...';
+    try {
+      const r = await fetch(`${VALIDATE_URL}?email=${encodeURIComponent(email)}`);
+      const data = await r.json();
+      if (data.valido) {
+        try { localStorage.setItem(EMAIL_KEY, email); } catch(e) {}
+        document.getElementById('splash').innerHTML = '<div class="spinner"></div><div class="splash-text">Liberando seu acesso...</div>';
+        document.getElementById('expiresAt').textContent = fmtDate(data.expira_em);
+        renderCountdown(data.expira_em);
+        renderAulas(data.aulas && data.aulas.length ? data.aulas : MOCK_AULAS);
+        document.getElementById('splash').classList.add('hide');
+      } else {
+        const motivo = data.motivo;
+        if (motivo === 'expirado') { showOffline('expirado', data.expira_em); return; }
+        if (motivo === 'bloqueado') { showOffline('bloqueado'); return; }
+        err.textContent = 'E-mail não encontrado. Você respondeu a pesquisa com esse e-mail?';
+      }
+    } catch(e) {
+      console.error(e);
+      err.textContent = 'Erro de conexão. Tente de novo em instantes.';
+    }
+  }
+
+  async function init() {
+    const { token, email } = getAuthParams();
+
+    // Sem token nem email = tela de login por email
+    if (!token && !email) {
+      showEmailLogin();
       return;
     }
 
+    // Tenta validar (prioriza token se ambos presentes)
+    const qs = token ? `t=${encodeURIComponent(token)}` : `email=${encodeURIComponent(email)}`;
     try {
-      const r = await fetch(`${VALIDATE_URL}?t=${encodeURIComponent(token)}`);
+      const r = await fetch(`${VALIDATE_URL}?${qs}`);
       const data = await r.json();
       if (!data.valido) {
+        // Se validação por email falhou, mostra login (não o offline-screen)
+        if (email && !token) {
+          try { localStorage.removeItem(EMAIL_KEY); } catch(e) {}
+          showEmailLogin('E-mail não encontrado nas respostas aprovadas. Tente outro?');
+          return;
+        }
         showOffline(data.motivo, data.expira_em);
         return;
       }
@@ -585,7 +664,6 @@
       document.getElementById('splash').classList.add('hide');
     } catch(err) {
       console.error(err);
-      // fallback: mostra UI sem dados ao vivo
       document.getElementById('expiresAt').textContent = 'após responder a pesquisa';
       renderAulas(MOCK_AULAS);
       document.getElementById('splash').classList.add('hide');
