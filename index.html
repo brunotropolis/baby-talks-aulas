@@ -421,16 +421,18 @@
   const EMAIL_KEY = 'curso_email';
 
   function getAuthParams() {
-    // Prioridade: query params da URL > localStorage
+    // Prioridade: query params da URL > localStorage. Se a URL traz uma chave fresca,
+    // ela ganha — limpamos a outra do localStorage pra não usar credencial antiga.
     const params = new URLSearchParams(window.location.search);
     const tokenUrl = (params.get('t') || params.get('token') || '').trim();
-    const emailUrl = (params.get('email') || params.get('e') || '').trim();
+    const emailUrl = (params.get('email') || params.get('e') || '').trim().toLowerCase();
 
-    if (tokenUrl) {
-      try { localStorage.setItem(TOKEN_KEY, tokenUrl); } catch(e) {}
-    }
     if (emailUrl) {
       try { localStorage.setItem(EMAIL_KEY, emailUrl); } catch(e) {}
+      try { localStorage.removeItem(TOKEN_KEY); } catch(e) {}
+    }
+    if (tokenUrl) {
+      try { localStorage.setItem(TOKEN_KEY, tokenUrl); } catch(e) {}
     }
     if (tokenUrl || emailUrl) {
       // Limpa URL sem reload
