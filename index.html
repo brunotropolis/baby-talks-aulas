@@ -634,22 +634,43 @@
     }
   }
 
-  async function init() {
+  function showRetry(email) {
+    document.getElementById('splash').classList.remove('hide');
+    document.getElementById('splash').innerHTML = `
+      <div style="max-width:420px;text-align:center;padding:24px;">
+        <div style="font-size:48px;margin-bottom:16px;">🔄</div>
+        <h2 style="color:#fff;font-size:20px;font-weight:600;margin-bottom:10px;">Pronto pra liberar seu acesso</h2>
+        <p style="color:#999;font-size:14px;line-height:1.5;margin-bottom:24px;">
+          ${email ? 'Vamos validar o seu acesso usando o e-mail <strong style="color:#fff">' + email + '</strong>.' : 'Clique abaixo pra validar seu acesso.'}
+        </p>
+        <button onclick="doValidate()"
+          style="background:#E91E63;color:#fff;border:none;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">
+          Clique aqui para validar seu acesso
+        </button>
+        <div id="retryErr" style="color:#ef5350;font-size:13px;margin-top:14px;min-height:20px;"></div>
+        ${email ? `<p style="color:#666;font-size:12px;margin-top:24px;">Não é seu e-mail? <a href="#" onclick="clearEmail();return false;" style="color:#E91E63;text-decoration:none;font-weight:500;">Trocar e-mail</a></p>` : ''}
+      </div>
+    `;
+  }
+
+  function clearEmail() {
+    try { localStorage.removeItem(EMAIL_KEY); } catch(e) {}
+    showEmailLogin();
+  }
+
+  async function doValidate() {
     const { token, email } = getAuthParams();
+    if (!token && !email) { showEmailLogin(); return; }
+    const errEl = document.getElementById('retryErr');
+    if (errEl) errEl.textContent = 'Validando...';
+    document.getElementById('splash').classList.remove('hide');
 
-    // Sem token nem email = tela de login por email
-    if (!token && !email) {
-      showEmailLogin();
-      return;
-    }
-
-    // Tenta validar (prioriza token se ambos presentes)
     const qs = token ? `t=${encodeURIComponent(token)}` : `email=${encodeURIComponent(email)}`;
     try {
       const r = await fetch(`${VALIDATE_URL}?${qs}`);
+      if (!r.ok || r.status >= 500) throw new Error('http ' + r.status);
       const data = await r.json();
       if (!data.valido) {
-        // Se validação por email falhou, mostra login (não o offline-screen)
         if (email && !token) {
           try { localStorage.removeItem(EMAIL_KEY); } catch(e) {}
           showEmailLogin('E-mail não encontrado nas respostas aprovadas. Tente outro?');
@@ -664,10 +685,21 @@
       document.getElementById('splash').classList.add('hide');
     } catch(err) {
       console.error(err);
-      document.getElementById('expiresAt').textContent = 'após responder a pesquisa';
-      renderAulas(MOCK_AULAS);
-      document.getElementById('splash').classList.add('hide');
+      showRetry(email);
+      const errEl2 = document.getElementById('retryErr');
+      if (errEl2) errEl2.textContent = 'A validação falhou. Tente de novo em instantes.';
     }
+  }
+
+  async function init() {
+    const { token, email } = getAuthParams();
+    // Sem token nem email = tela de login por email
+    if (!token && !email) {
+      showEmailLogin();
+      return;
+    }
+    // Tem credencial salva → valida automaticamente
+    doValidate();
   }
 
   init();
